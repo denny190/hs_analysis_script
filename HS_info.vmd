@@ -1,0 +1,60 @@
+#!/usr/local/bin/vmd
+
+set pdb_file [lindex $argv 0]
+set out_name [lindex $argv 1]
+set output_file_name [lindex $argv 2]
+set output_file [open $output_file_name a]
+set cutoff 1.0
+
+mol new $pdb_file autobonds 0
+
+set sel_all_wats [atomselect 0 "element N and not nucleic"]
+set total_struct_wats [$sel_all_wats num]
+
+puts $output_file "$out_name"
+puts $output_file "Total Waters: $total_struct_wats"
+
+set sel_hydration_sites [atomselect 0 "resname WAT"]
+set hs_count 0
+
+foreach i [$sel_hydration_sites get index] {
+    set sel_wats_near_HS [atomselect 0 "element N and not nucleic and within $cutoff of index $i"]
+    incr total_HS_wats [$sel_wats_near_HS num]
+} 
+puts $output_file "Total HS Wats: $total_HS_wats"
+
+set assignedWats [expr {double($total_HS_wats) / $total_struct_wats * 100}]
+set assignedWats [format "%.2f" $assignedWats]
+
+puts $output_file "Percentage of HS Assigned Wats: $assignedWats"
+ 
+foreach i [$sel_hydration_sites get index] {
+    incr hs_count
+    set sel_one_HS [atomselect top "index $i"]
+    set HSresid [$sel_one_HS get resid]
+    set sel_one_HS_wats [atomselect 0 "element N and not nucleic and within $cutoff of index $i"]
+    set numWat [$sel_one_HS_wats num]
+    
+    set pseudoOccupancy [expr {double($numWat) / $total_struct_wats}]
+    
+    puts $output_file "HS #$hs_count"
+    puts $output_file "numWat: $numWat"
+    puts $output_file "pseudoOccupancy: $pseudoOccupancy"
+    
+
+    set water_count 0
+    foreach water_idx [$sel_one_HS_wats get index] {
+        incr water_count
+        set sel_one_water [atomselect top "index $water_idx"]
+        set water_resid [$sel_one_water get resid]
+        
+        # Here we make sure to measure bond within the same molecule
+        set distance [measure bond [list $i $water_idx] top]
+        puts $output_file "$water_count\t\t$distance"
+    }
+    puts $output_file "\n"
+}
+
+
+close $output_file
+quit
